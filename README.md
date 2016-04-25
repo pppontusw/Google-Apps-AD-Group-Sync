@@ -1,5 +1,9 @@
 # Google Apps & Active Directory dynamic groups sync
 
+## What does it do?
+
+Updates your Google Apps Groups members based on attributes and filters stored in an LDAP server such as Microsoft Active Directory. This can be used to make dynamic groups, for example you can make a group that include everyone with 'Sweden' in the Office-field in AD and will update whenever a new account is created and this field is added.
+
 ## Prerequisites
 
 python-dev
