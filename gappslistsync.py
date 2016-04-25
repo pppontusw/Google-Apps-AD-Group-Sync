@@ -10,6 +10,8 @@ from apiclient.discovery import build
 from oauth2client.service_account import ServiceAccountCredentials
 from ConfigParser import SafeConfigParser
 
+import ldap
+
 try:
     import argparse
     flags = argparse.ArgumentParser(parents=[tools.argparser], description='Synchronize Google Groups with Active Directory lists or attributes')
@@ -29,7 +31,7 @@ SCOPES = ['https://www.googleapis.com/auth/admin.directory.user']
 APPLICATION_NAME = 'Google Apps AD Group Sync'
 
 #Client ID file of service account
-CLIENT_SECRET_FILE = parser.get('Google_Config', 'CLIENT_SECRET_FILE')
+CLIENT_SECRET_FILE = parser.get('Google_Config', 'CLIENT_SECRET_FILE_PATH')
 #Email of the Service Account
 SERVICE_ACCOUNT_EMAIL = parser.get('Google_Config', 'SERVICE_ACCOUNT_EMAIL')
 #Path to the Service Account's Private Key file
@@ -37,6 +39,15 @@ SERVICE_ACCOUNT_JSON_FILE_PATH = parser.get('Google_Config', 'SERVICE_ACCOUNT_JS
 #User that Service Account will impersonate (must be the email of a primary domain superadmin)
 SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT = parser.get('Google_Config', 'SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT')
 
+#LDAP settings
+LDAPUrl = parser.get('AD_Config', 'LDAPUrl')
+LDAPUserDN = parser.get('AD_Config', 'LDAPUserDN')
+LDAPUserPassword = parser.get('AD_Config', 'LDAPUserPassword')
+LDAPBaseDN = parser.get('AD_Config', 'LDAPBaseDN')
+try: 
+    LDAPAllUserGroupDN = parser.get('AD_Config', 'LDAPAllUserGroupDN')
+except:
+    print('No group defined, all users will be processed')
 
 def get_sacredentials():
 
@@ -74,21 +85,9 @@ def get_credentials():
         print('Storing credentials to ' + credential_path)
     return credentials
 
-def main():
-
-    # Check if we are using a service account to connect or launch the browser for interactive logon
-    if (flags.service_account):
-        credentials = get_sacredentials()
-        http = credentials.authorize(httplib2.Http())
-        service = discovery.build('admin', 'directory_v1', http=http)
-    else:
-        credentials = get_credentials()
-        http = credentials.authorize(httplib2.Http())
-        service = discovery.build('admin', 'directory_v1', http=http)
+def getUsersGAPI(service):
 
     print('Getting the first 10 users in the domain')
-
-    #results = http.request('https://www.googleapis.com/admin/directory/v1/users?domain=universumglobal.com&maxResults=10&orderBy=email')
 
     results = service.users().list(customer='my_customer', maxResults=10,
         orderBy='email').execute()
@@ -104,6 +103,44 @@ def main():
             print('{0} ({1})'.format(user['primaryEmail'],
                 user['name']['fullName']))
 
+def main():
+
+    # Check if we are using a service account to connect or launch the browser for interactive logon
+    if (flags.service_account):
+        credentials = get_sacredentials()
+        http = credentials.authorize(httplib2.Http())
+        service = discovery.build('admin', 'directory_v1', http=http)
+    else:
+        credentials = get_credentials()
+        http = credentials.authorize(httplib2.Http())
+        service = discovery.build('admin', 'directory_v1', http=http)
+
+    # This is a placeholder function to test authorization
+    getUsersGAPI(service)
+
+    # Connect to the LDAP server
+    ldapconn = ldap.initialize(LDAPUrl)
+    ldapconn.set_option(ldap.OPT_REFERRALS,0)
+
+    try:
+        ldapconn.simple_bind_s(LDAPUserDN, LDAPUserPassword)
+    except ldap.INVALID_CREDENTIALS:
+        print("Your username or password is incorrect")
+    except ldap.LDAPError, e:
+        print(e)
+
+    if LDAPAllUserGroupDN:
+        ldapfilter = '(&(objectclass=person)(memberof=' + LDAPAllUserGroupDN + '))'
+    else:
+        ldapfilter = '(&(objectclass=person))'
+    
+    ldapsearch = ldapconn.search_s(LDAPBaseDN, ldap.SCOPE_SUBTREE, ldapfilter, ['office', 'samaccountName', 'mail','memberOf'])
+
+    for user in ldapsearch:
+        cn = user[0]
+        attr = user[1]
+
+    ldapconn.unbind()
 
 if __name__ == '__main__':
     main()
