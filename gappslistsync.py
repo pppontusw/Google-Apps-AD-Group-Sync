@@ -116,12 +116,11 @@ def main():
     # Check if we are using a service account to connect or launch the browser for interactive logon
     if (flags.service_account):
         credentials = get_sacredentials()
-        http = credentials.authorize(httplib2.Http())
-        service = discovery.build('admin', 'directory_v1', http=http)
     else:
         credentials = get_credentials()
-        http = credentials.authorize(httplib2.Http())
-        service = discovery.build('admin', 'directory_v1', http=http)
+
+    http = credentials.authorize(httplib2.Http())
+    service = discovery.build('admin', 'directory_v1', http=http)
 
     # Connect to the LDAP server
     ldapconn = ldap.initialize(LDAPUrl)
