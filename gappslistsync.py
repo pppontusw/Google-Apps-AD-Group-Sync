@@ -11,6 +11,10 @@ from oauth2client.service_account import ServiceAccountCredentials
 from ConfigParser import SafeConfigParser
 
 import ldap
+from tinydb import TinyDB, Query
+import json
+
+db = TinyDB('db.json')
 
 try:
     import argparse
@@ -27,7 +31,7 @@ except:
     print('config.ini is either invalid or does not exist. Please verify your config.ini file.')
 
 #API Scope and Application name to use when asking for user permission
-SCOPES = ['https://www.googleapis.com/auth/admin.directory.user']
+SCOPES = ['https://www.googleapis.com/auth/admin.directory.user', 'https://www.googleapis.com/auth/admin.directory.group']
 APPLICATION_NAME = 'Google Apps AD Group Sync'
 
 #Client ID file of service account
@@ -85,23 +89,27 @@ def get_credentials():
         print('Storing credentials to ' + credential_path)
     return credentials
 
-def getUsersGAPI(service):
+def getGroupMembersGAPI(service, group):
 
-    print('Getting the first 10 users in the domain')
+    results = service.members().list(groupKey=group).execute()
 
-    results = service.users().list(customer='my_customer', maxResults=10,
-        orderBy='email').execute()
+    groups = results.get('members', [])
 
-    #print(results)
-    users = results.get('users', [])
+    memberlist = []
 
-    if not users:
-        print('No users in the domain.')
-    else:
-        print('Users:')
-        for user in users:
-            print('{0} ({1})'.format(user['primaryEmail'],
-                user['name']['fullName']))
+    for group in groups:
+        memberlist.append(group['email'])
+
+    return memberlist
+
+def addMemberToGroupGAPI(service, group, member):
+
+    memberjson = {
+        'email': member
+    }
+
+    results = service.members().insert(groupKey=group, body=memberjson).execute()
+
 
 def main():
 
@@ -115,13 +123,11 @@ def main():
         http = credentials.authorize(httplib2.Http())
         service = discovery.build('admin', 'directory_v1', http=http)
 
-    # This is a placeholder function to test authorization
-    getUsersGAPI(service)
-
     # Connect to the LDAP server
     ldapconn = ldap.initialize(LDAPUrl)
     ldapconn.set_option(ldap.OPT_REFERRALS,0)
 
+    # Bind to LDAP server
     try:
         ldapconn.simple_bind_s(LDAPUserDN, LDAPUserPassword)
     except ldap.INVALID_CREDENTIALS:
@@ -129,17 +135,31 @@ def main():
     except ldap.LDAPError, e:
         print(e)
 
+    # Create LDAP filter
     if LDAPAllUserGroupDN:
-        ldapfilter = '(&(objectclass=person)(memberof=' + LDAPAllUserGroupDN + '))'
+        baseldapfilter = '(&' + '(objectclass=person)(memberof=' + LDAPAllUserGroupDN + ')'
     else:
-        ldapfilter = '(&(objectclass=person))'
+        baseldapfilter = '(&' + '(objectclass=person)'
+
+    # Read group configuration from DB
+    gappsgroups = db.all()
+
+    # Load each group and compare members
+    for group in gappsgroups:
+        # Get all the members of this group
+        gappsmembers = getGroupMembersGAPI(service, group['gappslist'])
+        for operation in group['members']:
+            # Search for all users who match the criteria to be in this group
+            ldapfilter = baseldapfilter + '(' + operation['attribute'] + '=' + operation['value'] + '))'
+            ldapsearch = ldapconn.search_s(LDAPBaseDN, ldap.SCOPE_SUBTREE, ldapfilter, ['samAccountName','mail','memberOf'])
+            for user in ldapsearch:
+                attr = user[1]
+                mail = attr['mail']
+                # Filter out the users who already exists in the group
+                if (mail[0] not in gappsmembers):
+                    # And finally add the ones who don't
+                    addMemberToGroupGAPI(service, group['gappslist'], attr['mail'])
     
-    ldapsearch = ldapconn.search_s(LDAPBaseDN, ldap.SCOPE_SUBTREE, ldapfilter, ['office', 'samaccountName', 'mail','memberOf'])
-
-    for user in ldapsearch:
-        cn = user[0]
-        attr = user[1]
-
     ldapconn.unbind()
 
 if __name__ == '__main__':
