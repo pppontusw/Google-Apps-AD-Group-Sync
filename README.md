@@ -40,7 +40,12 @@ SERVICE_ACCOUNT_JSON_FILE_PATH = secret_key.json
 SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT = superadmin@example.com
 ```
 
-And populate the database (db.json), currently it needs to be done manually by running something like:
+Then you have to populate the database (db.json), you can do this one of two ways: 
+
+**If you are comfortable with JSON**
+
+Use the initdb.py script and modify the db.insert_multiple() function to insert all your lists. You can also use listdb.py to list your configuration and purgedb.py to empty the database.
+
 ```
 from tinydb import TinyDB, Query
 import json
@@ -84,6 +89,12 @@ db.insert_multiple([{
     'type': 'AND'
 }])
 ```
+
+**If you are not comfortable with JSON**
+
+Use the updatedb.py script to interactively add your lists and filters to the database.
+
+
 
 And then finally configure an account to use according to below instructions:
 
