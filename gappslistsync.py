@@ -229,7 +229,7 @@ def main():
                         print(mail + ' would be added to: ' + group['gappslist'])
                     else:
                         # And finally add the ones who don't
-                        addMemberToGroupGAPI(service, group['gappslist'], attr['mail'])
+                        addMemberToGroupGAPI(service, group['gappslist'], mail)
             if (flags.do_remove):
                 for member in gappsmembers:
                     # Lowercase again!
