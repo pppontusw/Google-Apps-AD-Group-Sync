@@ -3,8 +3,6 @@ import json
 
 db = TinyDB('db.json')
 
-
-
 def main():
 	selection = 0
 	while (selection != 'YES') and (selection != 'NO'):

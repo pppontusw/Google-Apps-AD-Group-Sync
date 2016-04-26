@@ -226,7 +226,6 @@ def main():
                 if (mail not in gappsmembers):
                     if (flags.simulate):
                         print(mail + ' would be added to: ' + group['gappslist'])
-                        print (gappsmembers)
                     else:
                         # And finally add the ones who don't
                         addMemberToGroupGAPI(service, group['gappslist'], attr['mail'])
