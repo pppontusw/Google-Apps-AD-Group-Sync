@@ -204,9 +204,10 @@ def main():
 
         # For groups where all attributes must match in order for the member to be added
         elif (group['type'] == 'AND'):
+            ldapfilter = baseldapfilter
             for operation in group['members']:
                 # Construct the search filter
-                ldapfilter = baseldapfilter + '(' + operation['attribute'] + '=' + operation['value'] + ')'
+                ldapfilter = ldapfilter + '(' + operation['attribute'] + '=' + operation['value'] + ')'
             ldapfilter = ldapfilter + ')'
             # Search for all users who match the criteria to be in this group
             ldapsearch = ldapconn.search_s(LDAPBaseDN, ldap.SCOPE_SUBTREE, ldapfilter, ['samAccountName','mail','memberOf'])
