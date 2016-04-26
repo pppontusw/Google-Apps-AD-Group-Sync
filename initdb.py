@@ -3,6 +3,14 @@ import json
 
 db = TinyDB('db.json')
 
+try:
+    import argparse
+    flags = argparse.ArgumentParser(description='Initialize the database')
+    flags.add_argument('--no-confirm', action='store_true', help='Don\'t prompt for confirmation')
+    flags = flags.parse_args()
+except ImportError:
+    flags = None
+
 def insertIntoDB():
     db.insert_multiple([{
         'gappslist': 'nordics@example.com',
@@ -42,7 +50,10 @@ def insertIntoDB():
     }])
 
 def main():
-    selection = 0
+    if (flags.no_confirm):
+        selection = 'YES'
+    else:
+        selection = 0
     while (selection != 'YES') and (selection != 'NO'):
         selection = raw_input('Are you sure you want to re-initialize the database? THIS WILL REMOVE ALL YOUR CONFIGURED SYNCHRONIZATIONS AND REPLACE THEM WITH WHATEVER IS DEFINED IN INITDB.PY. Yes / No?').upper()
     if (selection == 'YES'):
