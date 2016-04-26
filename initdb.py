@@ -13,9 +13,7 @@ except ImportError:
 
 def insertIntoDB():
     file = open('initdb.json')
-    print (file)
     data = json.load(file)
-    print (data)
     db.insert_multiple(data)
 
 def main():

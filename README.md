@@ -90,11 +90,14 @@ Create an initdb.json file (see below example) and use the initdb.py script to c
 
 Use the updatedb.py script to interactively add your lists and filters to the database.
 
+### You can also use the optional Ansible role for this tool
+
+Which you can find on [github as well](https://github.com/pppontusw/ansible-gapps-ad-groups-sync)
 
 
-And then finally configure an account to use according to below instructions:
+## And then finally configure an account to use according to below instructions:
 
-## To use a service account through one time logon
+### To use a service account through one time logon
 
 1. Use https://console.developers.google.com/start/api?id=admin to create or select a project in the Google Developers Console and automatically turn on the API. Click Continue, then Go to credentials.
 
@@ -112,7 +115,7 @@ And then finally configure an account to use according to below instructions:
 
 
 
-## To use a domain wide service account: 
+### To use a domain wide service account: 
 
 1. Set up a service account at https://console.developers.google.com/start/api?id=admin
 
