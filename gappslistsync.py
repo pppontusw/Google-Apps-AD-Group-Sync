@@ -20,6 +20,8 @@ try:
     import argparse
     flags = argparse.ArgumentParser(parents=[tools.argparser], description='Synchronize Google Groups with Active Directory lists or attributes')
     flags.add_argument('--service-account', action='store_true', help='Use service account credentials')
+    flags.add_argument('--simulate', action='store_true', help='Don\'t make changes to Google Apps')
+    flags.add_argument('--do-remove', action='store_true', help='REMOVE users who does not match the criteria from the Google Apps Group')
     flags = flags.parse_args()
 except ImportError:
     flags = None
@@ -34,30 +36,39 @@ except:
 SCOPES = ['https://www.googleapis.com/auth/admin.directory.user', 'https://www.googleapis.com/auth/admin.directory.group']
 APPLICATION_NAME = 'Google Apps AD Group Sync'
 
-#Client ID file of service account
-CLIENT_SECRET_FILE = parser.get('Google_Config', 'CLIENT_SECRET_FILE_PATH')
-#Email of the Service Account
-SERVICE_ACCOUNT_EMAIL = parser.get('Google_Config', 'SERVICE_ACCOUNT_EMAIL')
-#Path to the Service Account's Private Key file
-SERVICE_ACCOUNT_JSON_FILE_PATH = parser.get('Google_Config', 'SERVICE_ACCOUNT_JSON_FILE_PATH')
-#User that Service Account will impersonate (must be the email of a primary domain superadmin)
-SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT = parser.get('Google_Config', 'SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT')
+if (flags.service_account):
+    try:
+        #Path to the Service Account's Private Key file
+        SERVICE_ACCOUNT_JSON_FILE_PATH = parser.get('Google_Config', 'SERVICE_ACCOUNT_JSON_FILE_PATH')
+        #User that Service Account will impersonate (must be the email of a primary domain superadmin)
+        SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT = parser.get('Google_Config', 'SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT')
+    except Exception as e:
+        print('We could not load service account details from your config.ini - please double check. The error was ' + e)
+else:
+    try:
+        #Client ID file of service account
+        CLIENT_SECRET_FILE = parser.get('Google_Config', 'CLIENT_SECRET_FILE_PATH')
+    except Exception as e:
+        print('We could not load you client_secret file details from your config.ini - please double check. The error was ' + e)
 
-#LDAP settings
-LDAPUrl = parser.get('AD_Config', 'LDAPUrl')
-LDAPUserDN = parser.get('AD_Config', 'LDAPUserDN')
-LDAPUserPassword = parser.get('AD_Config', 'LDAPUserPassword')
-LDAPBaseDN = parser.get('AD_Config', 'LDAPBaseDN')
-try: 
-    LDAPAllUserGroupDN = parser.get('AD_Config', 'LDAPAllUserGroupDN')
-except:
-    print('No group defined, all users will be processed')
+try:
+    #LDAP settings
+    LDAPUrl = parser.get('AD_Config', 'LDAPUrl')
+    LDAPUserDN = parser.get('AD_Config', 'LDAPUserDN')
+    LDAPUserPassword = parser.get('AD_Config', 'LDAPUserPassword')
+    LDAPBaseDN = parser.get('AD_Config', 'LDAPBaseDN')
+    try: 
+        LDAPAllUserGroupDN = parser.get('AD_Config', 'LDAPAllUserGroupDN')
+    except:
+        print('No group defined, all users will be processed')
+except Exception as e:
+    print('We could not load your LDAP settings from config.ini - please double check. The error was ' + e)
 
 def get_sacredentials():
 
     credentials = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_JSON_FILE_PATH, SCOPES)
 
-    delegated_credentials = credentials.create_delegated(SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT )
+    delegated_credentials = credentials.create_delegated(SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT)
     
     return delegated_credentials
 
@@ -110,6 +121,10 @@ def addMemberToGroupGAPI(service, group, member):
 
     results = service.members().insert(groupKey=group, body=memberjson).execute()
 
+def removeMemberFromGroupGAPI(service, group, member):
+
+    results = service.members().delete(groupKey=group, memberKey=member).execute()
+
 
 def main():
 
@@ -131,7 +146,7 @@ def main():
     try:
         ldapconn.simple_bind_s(LDAPUserDN, LDAPUserPassword)
     except ldap.INVALID_CREDENTIALS:
-        print("Your username or password is incorrect")
+        print("LDAP ERROR: Your username or password is incorrect")
     except ldap.LDAPError, e:
         print(e)
 
@@ -144,21 +159,93 @@ def main():
     # Read group configuration from DB
     gappsgroups = db.all()
 
-    # Load each group and compare members
+    # Load each group that we are processing
     for group in gappsgroups:
         # Get all the members of this group
         gappsmembers = getGroupMembersGAPI(service, group['gappslist'])
-        for operation in group['members']:
+        # And convert to lowercase
+        gappsmembers = [gmember.lower() for gmember in gappsmembers]
+
+        # For groups where only one of the attributes need to match in order for the member to be added
+        if (group['type'] == 'OR'):
+            # If users should be removed we need to collect a list of all emails in our LDAP search so we can remove those who don't appear here
+            if (flags.do_remove):
+                usermailarray = []
+            for operation in group['members']:
+                # Construct the search filter
+                ldapfilter = baseldapfilter + '(' + operation['attribute'] + '=' + operation['value'] + '))'
+                # Search for all users who match the criteria to be in this group
+                ldapsearch = ldapconn.search_s(LDAPBaseDN, ldap.SCOPE_SUBTREE, ldapfilter, ['samAccountName','mail','memberOf'])
+                for user in ldapsearch:
+                    attr = user[1]
+                    mail = attr['mail']
+                    # Splice (can only have one primary email anyway) and lowercase
+                    mail = mail[0].lower()
+                    # If we have --do-remove we want to ensure we save them here so we do not remove any valid members
+                    if (flags.do_remove):
+                        usermailarray.append(mail)
+                    # Filter out the users who already exists in the group
+                    if (mail not in gappsmembers):
+                        if (flags.simulate):
+                            print(mail + ' would be added to: ' + group['gappslist'])
+                        else:
+                            # And finally add the ones who don't
+                            addMemberToGroupGAPI(service, group['gappslist'], mail)
+            if (flags.do_remove):
+                for member in gappsmembers:
+                    # Lowercase again!
+                    member = member.lower()                   
+                    # Filter out the members who aren't supposed to be in this group
+                    if (member not in usermailarray):
+                        if (flags.simulate):
+                            print(member + ' would be removed from: ' + group['gappslist'])
+                        else:
+                            # Delete each user that are not supposed to be here
+                            removeMemberFromGroupGAPI(service, group['gappslist'], member)
+
+        # For groups where all attributes must match in order for the member to be added
+        elif (group['type'] == 'AND'):
+            for operation in group['members']:
+                # Construct the search filter
+                ldapfilter = baseldapfilter + '(' + operation['attribute'] + '=' + operation['value'] + ')'
+            ldapfilter = ldapfilter + ')'
             # Search for all users who match the criteria to be in this group
-            ldapfilter = baseldapfilter + '(' + operation['attribute'] + '=' + operation['value'] + '))'
             ldapsearch = ldapconn.search_s(LDAPBaseDN, ldap.SCOPE_SUBTREE, ldapfilter, ['samAccountName','mail','memberOf'])
+            # If users should be removed we need to collect a list of all emails in our LDAP search so we can remove those who don't appear here
+            if (flags.do_remove):
+                usermailarray = []
+            # Step through users that should be in this group
             for user in ldapsearch:
                 attr = user[1]
                 mail = attr['mail']
+                # Splice (can only have one primary email anyway) and lowercase
+                mail = mail[0].lower()
+                # If we have --do-remove we want to ensure we save them here so we do not remove any valid members
+                if (flags.do_remove):
+                    usermailarray.append(mail)
                 # Filter out the users who already exists in the group
-                if (mail[0] not in gappsmembers):
-                    # And finally add the ones who don't
-                    addMemberToGroupGAPI(service, group['gappslist'], attr['mail'])
+                if (mail not in gappsmembers):
+                    if (flags.simulate):
+                        print(mail + ' would be added to: ' + group['gappslist'])
+                        print (gappsmembers)
+                    else:
+                        # And finally add the ones who don't
+                        addMemberToGroupGAPI(service, group['gappslist'], attr['mail'])
+            if (flags.do_remove):
+                for member in gappsmembers:
+                    # Lowercase again!
+                    member = member.lower()
+                    # Filter out the members who aren't supposed to be in this group
+                    if (member not in usermailarray):
+                        if (flags.simulate):
+                            print(member + ' would be removed from: ' + group['gappslist'])
+                        else:
+                            # Delete each user that are not supposed to be here
+                            removeMemberFromGroupGAPI(service, group['gappslist'], member)
+
+        else:
+            print('Group is missing type (needs to be AND or OR)')
+
     
     ldapconn.unbind()
 

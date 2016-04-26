@@ -34,9 +34,9 @@ LDAPAllUserGroupDN=CN=GoogleUsers,OU=OrgUnit,DC=example,DC=com
 
 [Google_Config]
 CLIENT_SECRET_FILE_PATH = client_secret.json
-SERVICE_ACCOUNT_EMAIL = id@developer.gserviceaccount.com
+# Path to the secret_key if you use a domain wide service account - otherwise this is not needed
 SERVICE_ACCOUNT_JSON_FILE_PATH = secret_key.json
-#Needs to be an account with superadmin permission, your configured service account will impersonate this user
+#Needs to be an account with superadmin permission - only needed if you use a domain wide service account
 SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT = superadmin@example.com
 ```
 
@@ -48,20 +48,40 @@ import json
 db = TinyDB('db.json')
 
 db.insert_multiple([{
-    'gappslist': 'test@example.com',
-    'members': [{
+    'gappslist': 'nordics@example.com',
+    'members': [
+    	{
         'attribute': 'physicalDeliveryOfficeName',
         'value': 'Denmark'
-        }],
-    'type': 'list'
+        },
+        {
+        'attribute': 'physicalDeliveryOfficeName',
+        'value': 'Sweden'
+        },
+        {
+        'attribute': 'physicalDeliveryOfficeName',
+        'value': 'Norway'
+        },
+        {
+        'attribute': 'physicalDeliveryOfficeName',
+        'value': 'Finland'
+        },
+    ],
+    'type': 'OR'
     },
     {
-    'gappslist': 'test2@example.com',
-    'members': [{
+    'gappslist': 'IT-US@example.com',
+    'members': [
+    	{
         'attribute': 'physicalDeliveryOfficeName',
         'value': 'USA'
-        }],
-    'type': 'list'
+        },
+        {
+        'attribute': 'Department',
+        'value': 'IT'
+        },
+    ],
+    'type': 'AND'
 }])
 ```
 
@@ -82,6 +102,8 @@ And then finally configure an account to use according to below instructions:
 6. Click the file_download (Download JSON) button to the right of the client ID.
 
 7. Move this file to your working directory and rename it client_secret.json.
+
+
 
 ## To use a domain wide service account: 
 
