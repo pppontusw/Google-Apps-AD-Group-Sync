@@ -2,7 +2,7 @@
 
 ## What does it do?
 
-Updates your Google Apps Groups members based on attributes and filters stored in an LDAP server such as Microsoft Active Directory. This can be used to make dynamic groups, for example you can make a group that include everyone with 'Sweden' in the Office-field in AD and will update whenever a new account is created and this field is added.
+Updates your Google Apps Groups members based on attributes and filters stored in an LDAP server such as Microsoft Active Directory. This can be used to make dynamic groups, for example you can make a group that include everyone with "Sweden" in the Office-field in AD and will update whenever a new account is created and this field is added.
 
 ## Prerequisites
 
@@ -44,50 +44,46 @@ Then you have to populate the database (db.json), you can do this one of two way
 
 **If you are comfortable with JSON**
 
-Use the initdb.py script and modify the db.insert_multiple() function to insert all your lists. You can also use listdb.py to list your configuration and purgedb.py to empty the database.
+Create an initdb.json file (see below example) and use the initdb.py script to copy this into the database. You can also use listdb.py to list your configuration and purgedb.py to empty the database.
 
 ```
-from tinydb import TinyDB, Query
-import json
 
-db = TinyDB('db.json')
-
-db.insert_multiple([{
-    'gappslist': 'nordics@example.com',
-    'members': [
-    	{
-        'attribute': 'physicalDeliveryOfficeName',
-        'value': 'Denmark'
+[{
+    "gappslist": "nordics@example.com",
+    "members": [
+        {
+        "attribute": "physicalDeliveryOfficeName",
+        "value": "Denmark"
         },
         {
-        'attribute': 'physicalDeliveryOfficeName',
-        'value': 'Sweden'
+        "attribute": "physicalDeliveryOfficeName",
+        "value": "Sweden"
         },
         {
-        'attribute': 'physicalDeliveryOfficeName',
-        'value': 'Norway'
+        "attribute": "physicalDeliveryOfficeName",
+        "value": "Norway"
         },
         {
-        'attribute': 'physicalDeliveryOfficeName',
-        'value': 'Finland'
-        },
+        "attribute": "physicalDeliveryOfficeName",
+        "value": "Finland"
+        }
     ],
-    'type': 'OR'
+    "type": "AND"
     },
     {
-    'gappslist': 'IT-US@example.com',
-    'members': [
-    	{
-        'attribute': 'physicalDeliveryOfficeName',
-        'value': 'USA'
+    "gappslist": "US-IT@example.com",
+    "members": [
+        {
+        "attribute": "physicalDeliveryOfficeName",
+        "value": "US"
         },
         {
-        'attribute': 'Department',
-        'value': 'IT'
-        },
+        "attribute": "Department",
+        "value": "IT"
+        }
     ],
-    'type': 'AND'
-}])
+    "type": "OR"
+}]
 ```
 
 **If you are not comfortable with JSON**
@@ -132,7 +128,7 @@ And then finally configure an account to use according to below instructions:
 
 7. Select Manage API client access in the Authentication section.
 
-8. In the Client name field enter the service account's Client ID.
+8. In the Client name field enter the service account Client ID.
 
 9. In the One or More API Scopes field enter the list of scopes that your application should be granted access to. For example if you need domain-wide access to Users and Groups enter: https://www.googleapis.com/auth/admin.directory.user, https://www.googleapis.com/auth/admin.directory.group
 
