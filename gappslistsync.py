@@ -31,6 +31,7 @@ try:
     parser.read('config.ini')
 except:
     print('config.ini is either invalid or does not exist. Please verify your config.ini file.')
+    exit()
 
 #API Scope and Application name to use when asking for user permission
 SCOPES = ['https://www.googleapis.com/auth/admin.directory.user', 'https://www.googleapis.com/auth/admin.directory.group']
