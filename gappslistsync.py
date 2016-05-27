@@ -19,9 +19,9 @@ import sys
 import datetime
 
 logging.getLogger("oauth2client").setLevel(logging.WARNING)
-logger = logging.getLogger('driveadmin')
+logger = logging.getLogger('gappslistsync')
 logger.setLevel(logging.INFO)
-file = logging.FileHandler('driveadmin.log')
+file = logging.FileHandler('gappslistsync.log')
 file.setLevel(logging.INFO)
 console = logging.StreamHandler(sys.stdout)
 console.setLevel(logging.INFO)
@@ -145,7 +145,7 @@ def removeMemberFromGroupGAPI(service, group, member):
 
 
 def main():
-
+    logger.info('RUN STARTED AT %s' % (datetime.datetime.now())
     # Check if we are using a service account to connect or launch the browser for interactive logon
     if (flags.service_account):
         credentials = get_sacredentials()
