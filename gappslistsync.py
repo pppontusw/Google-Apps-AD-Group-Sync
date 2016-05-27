@@ -145,7 +145,7 @@ def removeMemberFromGroupGAPI(service, group, member):
 
 
 def main():
-    logger.info('RUN STARTED AT %s' % (datetime.datetime.now())
+    logger.info('RUN STARTED AT %s' % datetime.datetime.now())
     # Check if we are using a service account to connect or launch the browser for interactive logon
     if (flags.service_account):
         credentials = get_sacredentials()
