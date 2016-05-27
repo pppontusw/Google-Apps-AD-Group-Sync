@@ -14,6 +14,23 @@ import ldap
 from tinydb import TinyDB, Query
 import json
 
+import logging
+import sys
+import datetime
+
+logging.getLogger("oauth2client").setLevel(logging.WARNING)
+logger = logging.getLogger('driveadmin')
+logger.setLevel(logging.INFO)
+file = logging.FileHandler('driveadmin.log')
+file.setLevel(logging.INFO)
+console = logging.StreamHandler(sys.stdout)
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file.setFormatter(logging.Formatter('%(message)s'))
+console.setFormatter(logging.Formatter('%(message)s'))
+logger.addHandler(file)
+logger.addHandler(console)
+
 db = TinyDB('db.json')
 
 try:
@@ -146,9 +163,9 @@ def main():
     try:
         ldapconn.simple_bind_s(LDAPUserDN, LDAPUserPassword)
     except ldap.INVALID_CREDENTIALS:
-        print("LDAP ERROR: Your username or password is incorrect")
+        logger.error("LDAP ERROR: Your username or password is incorrect")
     except ldap.LDAPError, e:
-        print(e)
+        logger.error(e)
 
     # Create LDAP filter
     if LDAPAllUserGroupDN:
@@ -187,10 +204,11 @@ def main():
                     # Filter out the users who already exists in the group
                     if (mail not in gappsmembers):
                         if (flags.simulate):
-                            print(mail + ' would be added to: ' + group['gappslist'])
+                            logger.info(mail + ' would be added to: ' + group['gappslist'])
                         else:
                             # And finally add the ones who don't
                             addMemberToGroupGAPI(service, group['gappslist'], mail)
+                            logger.info(member + ' was added to: ' + group['gappslist'])
             if (flags.do_remove):
                 for member in gappsmembers:
                     # Lowercase again!
@@ -198,10 +216,11 @@ def main():
                     # Filter out the members who aren't supposed to be in this group
                     if (member not in usermailarray):
                         if (flags.simulate):
-                            print(member + ' would be removed from: ' + group['gappslist'])
+                            logger.info(member + ' would be removed from: ' + group['gappslist'])
                         else:
                             # Delete each user that are not supposed to be here
                             removeMemberFromGroupGAPI(service, group['gappslist'], member)
+                            logger.info(member + ' was removed from: ' + group['gappslist'])
 
         # For groups where all attributes must match in order for the member to be added
         elif (group['type'] == 'AND'):
@@ -227,10 +246,11 @@ def main():
                 # Filter out the users who already exists in the group
                 if (mail not in gappsmembers):
                     if (flags.simulate):
-                        print(mail + ' would be added to: ' + group['gappslist'])
+                        logger.info(mail + ' would be added to: ' + group['gappslist'])
                     else:
                         # And finally add the ones who don't
                         addMemberToGroupGAPI(service, group['gappslist'], mail)
+                        logger.info(member + ' was added to: ' + group['gappslist'])
             if (flags.do_remove):
                 for member in gappsmembers:
                     # Lowercase again!
@@ -238,13 +258,14 @@ def main():
                     # Filter out the members who aren't supposed to be in this group
                     if (member not in usermailarray):
                         if (flags.simulate):
-                            print(member + ' would be removed from: ' + group['gappslist'])
+                            logger.info(member + ' would be removed from: ' + group['gappslist'])
                         else:
                             # Delete each user that are not supposed to be here
                             removeMemberFromGroupGAPI(service, group['gappslist'], member)
+                            logger.info(member + ' was removed from: ' + group['gappslist'])
 
         else:
-            print('Group is missing type (needs to be AND or OR)')
+            logger.error('Group is missing type (needs to be AND or OR)')
 
     
     ldapconn.unbind()
