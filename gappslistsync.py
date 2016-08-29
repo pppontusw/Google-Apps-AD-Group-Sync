@@ -137,7 +137,11 @@ def addMemberToGroupGAPI(service, group, member):
         'email': member
     }
 
-    results = service.members().insert(groupKey=group, body=memberjson).execute()
+    try:
+        results = service.members().insert(groupKey=group, body=memberjson).execute()
+    except Exception as e:
+        logger.warning(e)
+        
 
 def removeMemberFromGroupGAPI(service, group, member):
 
@@ -208,7 +212,7 @@ def main():
                         else:
                             # And finally add the ones who don't
                             addMemberToGroupGAPI(service, group['gappslist'], mail)
-                            logger.info(member + ' was added to: ' + group['gappslist'])
+                            logger.info(mail + ' was added to: ' + group['gappslist'])
             if (flags.do_remove):
                 for member in gappsmembers:
                     # Lowercase again!
@@ -250,7 +254,7 @@ def main():
                     else:
                         # And finally add the ones who don't
                         addMemberToGroupGAPI(service, group['gappslist'], mail)
-                        logger.info(member + ' was added to: ' + group['gappslist'])
+                        logger.info(mail + ' was added to: ' + group['gappslist'])
             if (flags.do_remove):
                 for member in gappsmembers:
                     # Lowercase again!
