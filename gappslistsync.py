@@ -1,4 +1,3 @@
-from __future__ import print_function
 import httplib2
 import os
 
@@ -47,7 +46,6 @@ try:
     parser = SafeConfigParser()
     parser.read('config.ini')
 except:
-    print('config.ini is either invalid or does not exist. Please verify your config.ini file.')
     exit()
 
 #API Scope and Application name to use when asking for user permission
@@ -61,13 +59,13 @@ if (flags.service_account):
         #User that Service Account will impersonate (must be the email of a primary domain superadmin)
         SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT = parser.get('Google_Config', 'SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT')
     except Exception as e:
-        print('We could not load service account details from your config.ini - please double check. The error was ' + e)
+        logger.warning(e)
 else:
     try:
         #Client ID file of service account
         CLIENT_SECRET_FILE = parser.get('Google_Config', 'CLIENT_SECRET_FILE_PATH')
     except Exception as e:
-        print('We could not load you client_secret file details from your config.ini - please double check. The error was ' + e)
+        logger.warning(e)
 
 try:
     #LDAP settings
@@ -78,9 +76,9 @@ try:
     try: 
         LDAPAllUserGroupDN = parser.get('AD_Config', 'LDAPAllUserGroupDN')
     except:
-        print('No group defined, all users will be processed')
+        logger.warning(e)
 except Exception as e:
-    print('We could not load your LDAP settings from config.ini - please double check. The error was ' + e)
+    logger.warning(e)
 
 def get_sacredentials():
 
@@ -115,7 +113,6 @@ def get_credentials():
             credentials = tools.run_flow(flow, store, flags)
         else: # Needed only for compatibility with Python 2.6
             credentials = tools.run(flow, store)
-        print('Storing credentials to ' + credential_path)
     return credentials
 
 def getGroupMembersGAPI(service, group):
@@ -186,90 +183,61 @@ def main():
         gappsmembers = getGroupMembersGAPI(service, group['gappslist'])
         # And convert to lowercase
         gappsmembers = [gmember.lower() for gmember in gappsmembers]
-
-        # For groups where only one of the attributes need to match in order for the member to be added
-        if (group['type'] == 'OR'):
-            # If users should be removed we need to collect a list of all emails in our LDAP search so we can remove those who don't appear here
+        # Create the base filter
+        ldapfilter = list()
+        ldapfilter.append(baseldapfilter)
+        # Step through the member values
+        for operation in group['members']:
+            # Construct the search filter
+            if (operation['attribute'] == "LDAPQuery"):
+                ldapfilter.append(operation['value'])
+            else:
+                if (type(operation['value']) == list):
+                    # If array = OR
+                    construction = '(|'
+                    for value in operation['value']:
+                        construction += '(' + operation['attribute'] + '=' + value + ')'
+                    construction += ')'
+                    ldapfilter.append(construction)
+                else:
+                    # AND
+                    ldapfilter.append('(' + operation['attribute'] + '=' + operation['value'] + ')')
+        ldapfilter.append(')')
+        searchfilter = ''.join(ldapfilter)
+        # Search for all users who match the criteria to be in this group
+        ldapsearch = ldapconn.search_s(LDAPBaseDN, ldap.SCOPE_SUBTREE, searchfilter, ['samAccountName','mail','memberOf'])
+        # If users should be removed we need to collect a list of all emails in our LDAP search so we can remove those who don't appear here
+        if (flags.do_remove):
+            usermailarray = []
+        # Step through users that should be in this group
+        for user in ldapsearch:
+            attr = user[1]
+            mail = attr['mail']
+            # Splice (can only have one primary email anyway) and lowercase
+            mail = mail[0].lower()
+            # If we have --do-remove we want to ensure we save them here so we do not remove any valid members
             if (flags.do_remove):
-                usermailarray = []
-            for operation in group['members']:
-                # Construct the search filter
-                ldapfilter = baseldapfilter + '(' + operation['attribute'] + '=' + operation['value'] + '))'
-                # Search for all users who match the criteria to be in this group
-                ldapsearch = ldapconn.search_s(LDAPBaseDN, ldap.SCOPE_SUBTREE, ldapfilter, ['samAccountName','mail','memberOf'])
-                for user in ldapsearch:
-                    attr = user[1]
-                    mail = attr['mail']
-                    # Splice (can only have one primary email anyway) and lowercase
-                    mail = mail[0].lower()
-                    # If we have --do-remove we want to ensure we save them here so we do not remove any valid members
-                    if (flags.do_remove):
-                        usermailarray.append(mail)
-                    # Filter out the users who already exists in the group
-                    if (mail not in gappsmembers):
-                        if (flags.simulate):
-                            logger.info(mail + ' would be added to: ' + group['gappslist'])
-                        else:
-                            # And finally add the ones who don't
-                            addMemberToGroupGAPI(service, group['gappslist'], mail)
-                            logger.info(mail + ' was added to: ' + group['gappslist'])
-            if (flags.do_remove):
-                for member in gappsmembers:
-                    # Lowercase again!
-                    member = member.lower()                   
-                    # Filter out the members who aren't supposed to be in this group
-                    if (member not in usermailarray):
-                        if (flags.simulate):
-                            logger.info(member + ' would be removed from: ' + group['gappslist'])
-                        else:
-                            # Delete each user that are not supposed to be here
-                            removeMemberFromGroupGAPI(service, group['gappslist'], member)
-                            logger.info(member + ' was removed from: ' + group['gappslist'])
-
-        # For groups where all attributes must match in order for the member to be added
-        elif (group['type'] == 'AND'):
-            ldapfilter = baseldapfilter
-            for operation in group['members']:
-                # Construct the search filter
-                ldapfilter = ldapfilter + '(' + operation['attribute'] + '=' + operation['value'] + ')'
-            ldapfilter = ldapfilter + ')'
-            # Search for all users who match the criteria to be in this group
-            ldapsearch = ldapconn.search_s(LDAPBaseDN, ldap.SCOPE_SUBTREE, ldapfilter, ['samAccountName','mail','memberOf'])
-            # If users should be removed we need to collect a list of all emails in our LDAP search so we can remove those who don't appear here
-            if (flags.do_remove):
-                usermailarray = []
-            # Step through users that should be in this group
-            for user in ldapsearch:
-                attr = user[1]
-                mail = attr['mail']
-                # Splice (can only have one primary email anyway) and lowercase
-                mail = mail[0].lower()
-                # If we have --do-remove we want to ensure we save them here so we do not remove any valid members
-                if (flags.do_remove):
-                    usermailarray.append(mail)
-                # Filter out the users who already exists in the group
-                if (mail not in gappsmembers):
+                usermailarray.append(mail)
+            # Filter out the users who already exists in the group
+            if (mail not in gappsmembers):
+                if (flags.simulate):
+                    logger.info(mail + ' would be added to: ' + group['gappslist'])
+                else:
+                    # And finally add the ones who don't
+                    addMemberToGroupGAPI(service, group['gappslist'], mail)
+                    logger.info(mail + ' was added to: ' + group['gappslist'])
+        if (flags.do_remove):
+            for member in gappsmembers:
+                # Lowercase again!
+                member = member.lower()
+                # Filter out the members who aren't supposed to be in this group
+                if (member not in usermailarray):
                     if (flags.simulate):
-                        logger.info(mail + ' would be added to: ' + group['gappslist'])
+                        logger.info(member + ' would be removed from: ' + group['gappslist'])
                     else:
-                        # And finally add the ones who don't
-                        addMemberToGroupGAPI(service, group['gappslist'], mail)
-                        logger.info(mail + ' was added to: ' + group['gappslist'])
-            if (flags.do_remove):
-                for member in gappsmembers:
-                    # Lowercase again!
-                    member = member.lower()
-                    # Filter out the members who aren't supposed to be in this group
-                    if (member not in usermailarray):
-                        if (flags.simulate):
-                            logger.info(member + ' would be removed from: ' + group['gappslist'])
-                        else:
-                            # Delete each user that are not supposed to be here
-                            removeMemberFromGroupGAPI(service, group['gappslist'], member)
-                            logger.info(member + ' was removed from: ' + group['gappslist'])
-
-        else:
-            logger.error('Group is missing type (needs to be AND or OR)')
+                        # Delete each user that are not supposed to be here
+                        removeMemberFromGroupGAPI(service, group['gappslist'], member)
+                        logger.info(member + ' was removed from: ' + group['gappslist'])
 
     
     ldapconn.unbind()

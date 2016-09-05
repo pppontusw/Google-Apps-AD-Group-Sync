@@ -42,9 +42,11 @@ SERVICE_ACCOUNT_IMPERSONATE_ACCOUNT = superadmin@example.com
 
 Then you have to populate the database (db.json), you can do this one of two ways: 
 
-**If you are comfortable with JSON**
+Create an initdb.json file (see below example) and use the initdb.py script to copy this into the database. 
 
-Create an initdb.json file (see below example) and use the initdb.py script to copy this into the database. You can also use listdb.py to list your configuration and purgedb.py to empty the database.
+If value is an array, a person will be added as long as they are part of any group/has any of the correct attributes.
+By default all attribute/values must match.
+You can also set "LDAPQuery" as attribute and then type a raw LDAP query into value, this will then be appended to the query constructed from group membership in Config.ini.
 
 ```
 
@@ -53,24 +55,11 @@ Create an initdb.json file (see below example) and use the initdb.py script to c
     "members": [
         {
         "attribute": "physicalDeliveryOfficeName",
-        "value": "Denmark"
-        },
-        {
-        "attribute": "physicalDeliveryOfficeName",
-        "value": "Sweden"
-        },
-        {
-        "attribute": "physicalDeliveryOfficeName",
-        "value": "Norway"
-        },
-        {
-        "attribute": "physicalDeliveryOfficeName",
-        "value": "Finland"
+        "value": ["Denmark", "Sweden", "Norway", "Finland"]
         }
-    ],
-    "type": "AND"
-    },
-    {
+    ]
+},
+{
     "gappslist": "US-IT@example.com",
     "members": [
         {
@@ -81,14 +70,19 @@ Create an initdb.json file (see below example) and use the initdb.py script to c
         "attribute": "Department",
         "value": "IT"
         }
-    ],
-    "type": "OR"
-}]
+    ]
+},
+{
+    "gappslist": "IT-Tech@example.com",
+    "members": [
+        {
+        "attribute": "LDAPQuery",
+        "value": "(|(Department=Technology)(Department=IT))"
+        }
+    ]
+}
+]
 ```
-
-**If you are not comfortable with JSON**
-
-Use the updatedb.py script to interactively add your lists and filters to the database.
 
 ### You can also use the optional Ansible role for this tool
 
