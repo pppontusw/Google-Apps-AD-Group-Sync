@@ -3,3 +3,9 @@ client_secret.json
 secret_key.json
 db.json
 config.ini
+*.log
+bin/
+include/
+lib/
+local/
+share/
