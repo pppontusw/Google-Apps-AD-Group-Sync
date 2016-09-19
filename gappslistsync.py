@@ -206,7 +206,9 @@ def main():
         ldapfilter.append(')')
         searchfilter = ''.join(ldapfilter)
         # Search for all users who match the criteria to be in this group
+        logger.debug('searchfilter: ' + searchfilter)
         ldapsearch = ldapconn.search_s(LDAPBaseDN, ldap.SCOPE_SUBTREE, searchfilter, ['samAccountName','mail','memberOf'])
+        logger.debug(ldapsearch)
         # If users should be removed we need to collect a list of all emails in our LDAP search so we can remove those who don't appear here
         if (flags.do_remove):
             usermailarray = []
